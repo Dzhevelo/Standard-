@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WINLINE LIGHT (FAST)</title>
+    <style>
+        :root {
+            --win-orange: #FF6A13;
+            --win-black: #141419;
+            --win-white: #FFFFFF;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        body {
+            background-color: var(--win-black);
+            font-family: 'Arial Black', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: var(--win-white);
+        }
+
+        /* Фонарик */
+        .flash-mode {
+            background: var(--win-orange) !important;
+            filter: brightness(2.5) saturate(1.5);
+            transition: filter 0.2s;
+        }
+
+        /* Стробоскоп оверлей */
+        .strobe-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--win-orange);
+            opacity: 0;
+            z-index: 90;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        .main-screen { text-align: center; z-index: 20; padding: 20px; max-width: 90vw; position: relative; }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin: 20px 0;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--win-white);
+            text-shadow: 0 0 30px rgba(255, 106, 19, 0.8);
+        }
+        p.subtitle { font-size: 1rem; margin-bottom: 30px; opacity: 0.7; }
+
+        .btn {
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            font-weight: 900;
+            border-radius: 50px;
+            font-family: inherit;
+            margin-bottom: 10px;
+        }
+        .btn-applause {
+            background: transparent;
+            color: var(--win-white);
+            border: 2px solid var(--win-orange);
+            box-shadow: 0 0 15px rgba(255, 106, 19, 0.3);
+        }
+        .btn-applause:active { background: var(--win-orange); color: var(--win-black); }
+
+        .btn-flash {
+            background: var(--win-orange);
+            color: var(--win-black);
+            box-shadow: 0 0 40px rgba(255, 106, 19, 0.6);
+        }
+        .btn-flash:active { transform: scale(0.95); }
+        .btn-flash.active {
+            background: var(--win-white);
+            color: var(--win-black);
+            box-shadow: 0 0 60px white;
+        }
+
+        .btn-strobe {
+            background: transparent;
+            color: var(--win-orange);
+            border: 2px solid var(--win-orange);
+        }
+        .btn-strobe:active { transform: scale(0.95); }
+        .btn-strobe.active { background: var(--win-orange); color: var(--win-black); }
+
+        .clap-animation { position: relative; width: 80px; height: 80px; margin: 20px auto; }
+        .hand {
+            position: absolute; width: 38px; height: 56px; background: #fff;
+            border-radius: 12px 12px 0 0; transform-origin: bottom center;
+            animation: clap 0.15s infinite alternate;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .left-hand { left: 2px; transform: rotate(-15deg); }
+        .right-hand { right: 2px; transform: rotate(15deg); }
+        @keyframes clap {
+            0% { transform: rotate(-15deg) translateY(0); }
+            100% { transform: rotate(0deg) translateY(-8px); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Стробоскоп -->
+    <div class="strobe-overlay" id="strobe"></div>
+
+    <div class="main-screen">
+        <h1>WINLINE</h1>
+        <p class="subtitle">Твой момент триумфа</p>
+
+        <div class="clap-animation">
+            <div class="hand left-hand"></div>
+            <div class="hand right-hand"></div>
+        </div>
+
+        <button class="btn btn-applause" id="play-btn" onclick="startShow()">Аплодировать!</button>
+        <br>
+        <button class="btn btn-flash" id="light-btn" onclick="toggleWinFlash()" style="display:none;">💡 ФОНАРИК</button>
+        <br>
+        <button class="btn btn-strobe" id="strobe-btn" onclick="toggleStrobe()" style="display:none;">⚡ СТРОБОСКОП</button>
+    </div>
+
+    <script>
+        // 1. Звук (упрощённый, без сложных проверок)
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound() {
+            initAudio();
+            audioCtx.resume(); // Важно для мобильных браузеров
+
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => singleClap(), i * 100);
+            }
+        }
+
+        function singleClap() {
+            const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let j = 0; j < data.length; j++) {
+                data[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / data.length, 2);
+            }
+            const src = audioCtx.createBufferSource();
+            src.buffer = buffer;
+            src.start(0);
+        }
+
+        // 2. Фонарик
+        let isFlashOn = false;
+        const lightBtn = document.getElementById('light-btn');
+
+        function toggleWinFlash() {
+            isFlashOn = !isFlashOn;
+            document.body.classList.toggle('flash-mode', isFlashOn);
+            
+            if (isFlashOn) {
+                lightBtn.textContent = "ВЫКЛЮЧИТЬ СВЕТ";
+                lightBtn.classList.add('active');
+            } else {
+                lightBtn.textContent = "💡 ФОНАРИК";
+                lightBtn.classList.remove('active');
+            }
+        }
+
+        // 3. Стробоскоп
+        let isStrobeOn = false;
+        let strobeInterval;
+        const strobeBtn = document.getElementById('strobe-btn');
+        const strobeOverlay = document.getElementById('strobe');
+
+        function toggleStrobe() {
+            isStrobeOn = !isStrobeOn;
+            if (isStrobeOn) {
+                strobeBtn.classList.add('active');
+                strobeBtn.textContent = "СТРОБОСКОП ВКЛ.";
+                let toggle = false;
+                strobeInterval = setInterval(() => {
+                    toggle = !toggle;
+                    strobeOverlay.style.opacity = toggle ? '0.9' : '0';
+                    strobeOverlay.style.background = toggle ? '#FF6A13' : '#FFFFFF';
+                }, 100);
+            } else {
+                clearInterval(strobeInterval);
+                strobeOverlay.style.opacity = '0';
+                strobeBtn.classList.remove('active');
+                strobeBtn.textContent = "⚡ СТРОБОСКОП";
+            }
+        }
+
+        // 4. Запуск шоу
+        function startShow() {
+            playSound();
+            lightBtn.style.display = 'inline-block';
+            strobeBtn.style.display = 'inline-block';
+        }
+    </script>
+</body>
+</html>
